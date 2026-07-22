@@ -104,11 +104,15 @@ class Geocoder:
                 )
             }
 
+
         except Exception as erro:
 
             print(
+
                 f"Erro ao localizar '{endereco}': {erro}",
+
                 flush=True
+
             )
 
-            return None
+            raise
