@@ -1,18 +1,27 @@
-from config import TEMPO_MAXIMO_ROTA
+from config import Config
 
 
 class RouteAnalyzer:
 
-    def validar_rotas(self, estatisticas):
-
-        """
-        Verifica se todas as rotas respeitam o limite máximo.
-        """
+    def validar_rotas(
+        self,
+        estatisticas
+    ):
 
         for rota in estatisticas:
 
-            if rota["tempo_minutos"] > TEMPO_MAXIMO_ROTA:
+            tempo_segundos = rota.get(
+                "tempo_segundos",
+                rota.get(
+                    "tempo_total",
+                    0
+                )
+            )
 
+            if (
+                tempo_segundos
+                > Config.TEMPO_MAXIMO_ROTA
+            ):
                 return False
 
         return True
