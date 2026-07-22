@@ -36,8 +36,7 @@ class Geocoder:
 
             resultado = self.client.pelias_search(
                 text=endereco,
-                size=1,
-                boundary_country=["BR"]
+                size=1
             )
 
             features = resultado.get(
