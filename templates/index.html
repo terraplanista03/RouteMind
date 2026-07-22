@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>{{ titulo }}</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='css/style.css') }}"
+    >
+
+</head>
+
+<body>
+
+    <main class="container">
+
+        <section class="card">
+
+            <h1>RouteMind</h1>
+
+            <p class="descricao-formulario">
+                Digite a origem e os endereços das entregas.
+                Insira um endereço por linha.
+            </p>
+
+            {% if erro %}
+
+                <div class="mensagem-erro">
+
+                    <strong>Não foi possível gerar as rotas.</strong>
+
+                    <p>
+                        {{ erro }}
+                    </p>
+
+                </div>
+
+            {% endif %}
+
+            <form
+                id="formulario-rotas"
+                action="/gerar"
+                method="post"
+            >
+
+                <div class="campo">
+
+                    <label for="origem">
+                        Origem
+                    </label>
+
+                    <input
+                        type="text"
+                        id="origem"
+                        name="origem"
+                        value="{{ origem | default('', true) }}"
+                        placeholder="Ex.: Av. Fernando Ferrari, Vitória - ES"
+                        autocomplete="street-address"
+                        required
+                    >
+
+                </div>
+
+                <div class="campo">
+
+                    <label for="enderecos">
+                        Endereços das entregas
+                    </label>
+
+                    <textarea
+                        id="enderecos"
+                        name="enderecos"
+                        rows="12"
+                        placeholder="Digite um endereço por linha&#10;&#10;Ex.:&#10;Rua das Palmeiras, Vila Velha - ES&#10;Rua Sete de Setembro, Vitória - ES&#10;Rua João Pessoa, Cariacica - ES"
+                        required
+                    >{{ enderecos | default('', true) }}</textarea>
+
+                    <p id="contador-enderecos">
+                        0 endereços informados
+                    </p>
+
+                </div>
+
+                <button
+                    id="botao-gerar"
+                    class="botao"
+                    type="submit"
+                >
+                    Gerar rotas
+                </button>
+
+            </form>
+
+        </section>
+
+    </main>
+
+    <div
+        id="carregamento"
+        class="carregamento"
+        hidden
+    >
+
+        <div class="carregamento-conteudo">
+
+            <div class="spinner"></div>
+
+            <h2>Gerando rotas...</h2>
+
+            <p id="mensagem-carregamento">
+                Validando os endereços informados.
+            </p>
+
+        </div>
+
+    </div>
+
+    <script>
+
+        const formulario = document.getElementById(
+            "formulario-rotas"
+        );
+
+        const campoOrigem = document.getElementById(
+            "origem"
+        );
+
+        const campoEnderecos = document.getElementById(
+            "enderecos"
+        );
+
+        const contadorEnderecos = document.getElementById(
+            "contador-enderecos"
+        );
+
+        const botaoGerar = document.getElementById(
+            "botao-gerar"
+        );
+
+        const carregamento = document.getElementById(
+            "carregamento"
+        );
+
+        const mensagemCarregamento = document.getElementById(
+            "mensagem-carregamento"
+        );
+
+        const mensagens = [
+            "Validando os endereços informados.",
+            "Localizando origem e entregas.",
+            "Calculando distâncias e tempos.",
+            "Definindo a quantidade de motoristas.",
+            "Otimizando a ordem das entregas.",
+            "Preparando o resultado das rotas."
+        ];
+
+        let intervaloMensagens = null;
+
+        function obterEnderecos() {
+
+            return campoEnderecos.value
+                .split("\n")
+                .map(function (endereco) {
+
+                    return endereco.trim();
+
+                })
+                .filter(function (endereco) {
+
+                    return endereco.length > 0;
+
+                });
+
+        }
+
+        function contarEnderecos() {
+
+            const quantidade = obterEnderecos().length;
+
+            if (quantidade === 1) {
+
+                contadorEnderecos.textContent =
+                    "1 endereço informado";
+
+                return;
+
+            }
+
+            contadorEnderecos.textContent =
+                quantidade + " endereços informados";
+
+        }
+
+        function iniciarMensagensCarregamento() {
+
+            let indiceMensagem = 0;
+
+            mensagemCarregamento.textContent =
+                mensagens[indiceMensagem];
+
+            intervaloMensagens = setInterval(
+                function () {
+
+                    indiceMensagem += 1;
+
+                    if (indiceMensagem >= mensagens.length) {
+
+                        indiceMensagem =
+                            mensagens.length - 1;
+
+                        clearInterval(
+                            intervaloMensagens
+                        );
+
+                    }
+
+                    mensagemCarregamento.textContent =
+                        mensagens[indiceMensagem];
+
+                },
+                1800
+            );
+
+        }
+
+        campoEnderecos.addEventListener(
+            "input",
+            contarEnderecos
+        );
+
+        formulario.addEventListener(
+            "submit",
+            function (evento) {
+
+                const origem = campoOrigem.value.trim();
+
+                const enderecos = obterEnderecos();
+
+                if (!origem) {
+
+                    evento.preventDefault();
+
+                    alert(
+                        "Informe o endereço de origem."
+                    );
+
+                    campoOrigem.focus();
+
+                    return;
+
+                }
+
+                if (enderecos.length === 0) {
+
+                    evento.preventDefault();
+
+                    alert(
+                        "Informe pelo menos um endereço de entrega."
+                    );
+
+                    campoEnderecos.focus();
+
+                    return;
+
+                }
+
+                botaoGerar.disabled = true;
+
+                botaoGerar.textContent =
+                    "Gerando rotas...";
+
+                carregamento.hidden = false;
+
+                iniciarMensagensCarregamento();
+
+            }
+        );
+
+        window.addEventListener(
+            "pageshow",
+            function () {
+
+                carregamento.hidden = true;
+
+                botaoGerar.disabled = false;
+
+                botaoGerar.textContent =
+                    "Gerar rotas";
+
+                if (intervaloMensagens) {
+
+                    clearInterval(
+                        intervaloMensagens
+                    );
+
+                }
+
+            }
+        );
+
+        contarEnderecos();
+
+    </script>
+
+</body>
+
+</html>

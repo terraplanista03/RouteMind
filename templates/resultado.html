@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>{{ titulo }}</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='css/style.css') }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    >
+
+</head>
+
+<body>
+
+    <main class="container">
+
+        <h1>Resultado das Rotas</h1>
+
+        {% if compartilhado %}
+
+            <section class="card">
+
+                <strong>Rota compartilhada</strong>
+
+                <p>
+                    Você está visualizando uma rota gerada no RouteMind.
+                </p>
+
+            </section>
+
+        {% endif %}
+
+        <div class="acoes-rota">
+
+            <button
+                class="botao"
+                type="button"
+                onclick="compartilharRota()"
+            >
+                Compartilhar rota
+            </button>
+
+            <a
+                class="botao"
+                href="/exportar/excel/{{ resultado_id }}"
+            >
+                Exportar Excel
+            </a>
+
+            <a
+                class="botao"
+                href="/exportar/pdf/{{ resultado_id }}"
+            >
+                Exportar PDF
+            </a>
+
+            <a
+                class="botao botao-secundario"
+                href="/"
+            >
+                Gerar novas rotas
+            </a>
+
+        </div>
+
+        <section
+            id="area-compartilhamento"
+            class="card"
+            hidden
+        >
+
+            <h2>Compartilhar rota</h2>
+
+            <p>
+                Copie o link abaixo e envie para outra pessoa:
+            </p>
+
+            <div class="campo">
+
+                <input
+                    id="link-compartilhamento"
+                    type="text"
+                    readonly
+                >
+
+            </div>
+
+            <div class="acoes-rota">
+
+                <button
+                    class="botao"
+                    type="button"
+                    onclick="copiarLinkCompartilhamento()"
+                >
+                    Copiar link
+                </button>
+
+                <button
+                    class="botao botao-secundario"
+                    type="button"
+                    onclick="fecharCompartilhamento()"
+                >
+                    Fechar
+                </button>
+
+            </div>
+
+        </section>
+
+        <section class="card">
+
+            <h2>Mapa das Rotas</h2>
+
+            <div id="mapa"></div>
+
+        </section>
+
+        <section class="card">
+
+            <h2>Origem</h2>
+
+            <p>
+                {{ origem }}
+            </p>
+
+            {% if origem_dados.cidade %}
+
+                <p>
+
+                    {{ origem_dados.cidade }}
+
+                    {% if origem_dados.estado %}
+
+                        - {{ origem_dados.estado }}
+
+                    {% endif %}
+
+                </p>
+
+            {% endif %}
+
+        </section>
+
+        <section class="card">
+
+            <h2>Resumo</h2>
+
+            <div class="resumo-rota">
+
+                <p>
+
+                    <strong>Motoristas:</strong>
+
+                    {{ analise.motoristas }}
+
+                </p>
+
+                <p>
+
+                    <strong>Total de entregas:</strong>
+
+                    {{ entregas | length }}
+
+                </p>
+
+                <p>
+
+                    <strong>Distância total:</strong>
+
+                    {{ analise.distancia_total_km }} km
+
+                </p>
+
+                <p>
+
+                    <strong>Tempo de deslocamento:</strong>
+
+                    {{ analise.tempo_deslocamento }} minutos
+
+                </p>
+
+                <p>
+
+                    <strong>Tempo total:</strong>
+
+                    {{ analise.tempo_total }} minutos
+
+                </p>
+
+            </div>
+
+        </section>
+
+        {% for rota in rotas %}
+
+            <section class="card">
+
+                <h2>
+                    Motorista {{ rota.motorista }}
+                </h2>
+
+                {% for estatistica in analise.rotas %}
+
+                    {% if estatistica.motorista == rota.motorista %}
+
+                        <div class="resumo-rota">
+
+                            <p>
+
+                                <strong>Entregas:</strong>
+
+                                {{ estatistica.entregas }}
+
+                            </p>
+
+                            <p>
+
+                                <strong>Distância:</strong>
+
+                                {{ estatistica.distancia_km }} km
+
+                            </p>
+
+                            <p>
+
+                                <strong>Deslocamento:</strong>
+
+                                {{ estatistica.tempo_deslocamento }}
+                                minutos
+
+                            </p>
+
+                            <p>
+
+                                <strong>Paradas:</strong>
+
+                                {{ estatistica.tempo_paradas }}
+                                minutos
+
+                            </p>
+
+                            <p>
+
+                                <strong>Tempo total:</strong>
+
+                                {{ estatistica.tempo_total }}
+                                minutos
+
+                            </p>
+
+                        </div>
+
+                    {% endif %}
+
+                {% endfor %}
+
+                <div class="acoes-rota">
+
+                    <a
+                        id="google-maps-{{ rota.motorista }}"
+                        class="botao"
+                        href="#"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        Abrir no Google Maps
+                    </a>
+
+                    <button
+                        class="botao"
+                        type="button"
+                        onclick="copiarRota({{ rota.motorista }})"
+                    >
+                        Copiar roteiro
+                    </button>
+
+                    <button
+                        class="botao"
+                        type="button"
+                        onclick="imprimirRota({{ rota.motorista }})"
+                    >
+                        Imprimir roteiro
+                    </button>
+
+                </div>
+
+                <ol class="roteiro">
+
+                    {% for ponto in rota.roteiro %}
+
+                        <li>
+
+                            <strong>
+                                {{ ponto.tipo }}
+                            </strong>
+
+                            <p>
+                                {{ ponto.endereco }}
+                            </p>
+
+                            {% if ponto.tipo == "Entrega" %}
+
+                                {% if ponto.bairro or ponto.cidade %}
+
+                                    <p>
+
+                                        {% if ponto.bairro %}
+
+                                            {{ ponto.bairro }}
+
+                                        {% endif %}
+
+                                        {% if ponto.bairro and ponto.cidade %}
+
+                                            -
+
+                                        {% endif %}
+
+                                        {% if ponto.cidade %}
+
+                                            {{ ponto.cidade }}
+
+                                        {% endif %}
+
+                                    </p>
+
+                                {% endif %}
+
+                            {% endif %}
+
+                        </li>
+
+                    {% endfor %}
+
+                </ol>
+
+            </section>
+
+        {% endfor %}
+
+        <div class="acoes-rota">
+
+            <button
+                class="botao"
+                type="button"
+                onclick="compartilharRota()"
+            >
+                Compartilhar rota
+            </button>
+
+            <a
+                class="botao"
+                href="/exportar/excel/{{ resultado_id }}"
+            >
+                Exportar Excel
+            </a>
+
+            <a
+                class="botao"
+                href="/exportar/pdf/{{ resultado_id }}"
+            >
+                Exportar PDF
+            </a>
+
+            <a
+                class="botao botao-secundario"
+                href="/"
+            >
+                Gerar novas rotas
+            </a>
+
+        </div>
+
+    </main>
+
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    ></script>
+
+    <script>
+
+        const origem = {
+            latitude: {{ origem_dados.latitude | tojson }},
+            longitude: {{ origem_dados.longitude | tojson }},
+            endereco: {{ origem | tojson }}
+        };
+
+        const rotas = {{ rotas | tojson }};
+
+        const analise = {{ analise | tojson }};
+
+        const caminhoCompartilhamento =
+            {{ link_compartilhamento | tojson }};
+
+        const cores = [
+            "#2563eb",
+            "#dc2626",
+            "#16a34a",
+            "#9333ea",
+            "#ea580c",
+            "#0891b2"
+        ];
+
+        const mapa = L.map(
+            "mapa"
+        ).setView(
+            [
+                origem.latitude,
+                origem.longitude
+            ],
+            12
+        );
+
+        L.tileLayer(
+            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            {
+                maxZoom: 19,
+                attribution: "&copy; OpenStreetMap"
+            }
+        ).addTo(
+            mapa
+        );
+
+        const iconeOrigem = L.divIcon({
+            className: "marcador-origem",
+            html: "🏠",
+            iconSize: [36, 36],
+            iconAnchor: [18, 18]
+        });
+
+        const marcadorOrigem = L.marker(
+            [
+                origem.latitude,
+                origem.longitude
+            ],
+            {
+                icon: iconeOrigem
+            }
+        ).addTo(
+            mapa
+        );
+
+        marcadorOrigem.bindPopup(`
+            <strong>Origem</strong><br>
+            ${origem.endereco}
+        `);
+
+        const limites = [
+            [
+                origem.latitude,
+                origem.longitude
+            ]
+        ];
+
+        const legenda = L.control({
+            position: "bottomright"
+        });
+
+        legenda.onAdd = function () {
+
+            const div = L.DomUtil.create(
+                "div",
+                "legenda-mapa"
+            );
+
+            let conteudo = "<strong>Rotas</strong>";
+
+            rotas.forEach(
+                function (rota, indiceRota) {
+
+                    const cor = cores[
+                        indiceRota % cores.length
+                    ];
+
+                    conteudo += `
+                        <div class="item-legenda">
+
+                            <span
+                                class="cor-legenda"
+                                style="background-color: ${cor};"
+                            ></span>
+
+                            Motorista ${rota.motorista}
+
+                        </div>
+                    `;
+
+                }
+            );
+
+            div.innerHTML = conteudo;
+
+            return div;
+
+        };
+
+        legenda.addTo(
+            mapa
+        );
+
+        rotas.forEach(
+            function (rota, indiceRota) {
+
+                const corRota = cores[
+                    indiceRota % cores.length
+                ];
+
+                const coordenadas = [
+                    [
+                        origem.latitude,
+                        origem.longitude
+                    ]
+                ];
+
+                const enderecosGoogleMaps = [];
+
+                let numeroParada = 0;
+
+                rota.roteiro.forEach(
+                    function (ponto) {
+
+                        if (
+                            ponto.tipo === "Entrega"
+                            && ponto.latitude
+                            && ponto.longitude
+                        ) {
+
+                            numeroParada += 1;
+
+                            const coordenada = [
+                                ponto.latitude,
+                                ponto.longitude
+                            ];
+
+                            coordenadas.push(
+                                coordenada
+                            );
+
+                            limites.push(
+                                coordenada
+                            );
+
+                            enderecosGoogleMaps.push(
+                                ponto.latitude
+                                + ","
+                                + ponto.longitude
+                            );
+
+                            const iconeEntrega = L.divIcon({
+                                className: "marcador-entrega",
+                                html: `
+                                    <div
+                                        style="background-color: ${corRota};"
+                                    >
+                                        ${numeroParada}
+                                    </div>
+                                `,
+                                iconSize: [32, 32],
+                                iconAnchor: [16, 16]
+                            });
+
+                            const marcador = L.marker(
+                                coordenada,
+                                {
+                                    icon: iconeEntrega
+                                }
+                            ).addTo(
+                                mapa
+                            );
+
+                            marcador.bindPopup(`
+                                <div style="min-width: 220px;">
+
+                                    <h3
+                                        style="
+                                            margin: 0;
+                                            color: ${corRota};
+                                        "
+                                    >
+                                        Motorista ${rota.motorista}
+                                    </h3>
+
+                                    <hr>
+
+                                    <strong>Parada:</strong>
+                                    ${numeroParada}
+
+                                    <br>
+
+                                    <strong>Endereço:</strong>
+
+                                    <br>
+
+                                    ${ponto.endereco}
+
+                                    <br><br>
+
+                                    <strong>Bairro:</strong>
+                                    ${ponto.bairro || "Não informado"}
+
+                                    <br>
+
+                                    <strong>Cidade:</strong>
+                                    ${ponto.cidade || "Não informada"}
+
+                                </div>
+                            `);
+
+                        }
+
+                    }
+                );
+
+                coordenadas.push(
+                    [
+                        origem.latitude,
+                        origem.longitude
+                    ]
+                );
+
+                L.polyline(
+                    coordenadas,
+                    {
+                        color: corRota,
+                        weight: 5,
+                        opacity: 0.8
+                    }
+                ).addTo(
+                    mapa
+                );
+
+                const botaoGoogleMaps = document.getElementById(
+                    "google-maps-" + rota.motorista
+                );
+
+                if (
+                    botaoGoogleMaps
+                    && enderecosGoogleMaps.length > 0
+                ) {
+
+                    const origemGoogleMaps =
+                        origem.latitude
+                        + ","
+                        + origem.longitude;
+
+                    const destinoGoogleMaps =
+                        enderecosGoogleMaps[
+                            enderecosGoogleMaps.length - 1
+                        ];
+
+                    const pontosIntermediarios =
+                        enderecosGoogleMaps.slice(
+                            0,
+                            -1
+                        );
+
+                    let urlGoogleMaps =
+                        "https://www.google.com/maps/dir/?api=1"
+                        + "&origin="
+                        + encodeURIComponent(
+                            origemGoogleMaps
+                        )
+                        + "&destination="
+                        + encodeURIComponent(
+                            destinoGoogleMaps
+                        )
+                        + "&travelmode=driving";
+
+                    if (
+                        pontosIntermediarios.length > 0
+                    ) {
+
+                        urlGoogleMaps +=
+                            "&waypoints="
+                            + encodeURIComponent(
+                                pontosIntermediarios.join("|")
+                            );
+
+                    }
+
+                    botaoGoogleMaps.href =
+                        urlGoogleMaps;
+
+                }
+
+            }
+        );
+
+        if (
+            limites.length > 1
+        ) {
+
+            mapa.fitBounds(
+                limites,
+                {
+                    padding: [30, 30]
+                }
+            );
+
+        }
+
+        function obterLinkCompartilhamento() {
+
+            return (
+                window.location.origin
+                + caminhoCompartilhamento
+            );
+
+        }
+
+        function compartilharRota() {
+
+            const area = document.getElementById(
+                "area-compartilhamento"
+            );
+
+            const campo = document.getElementById(
+                "link-compartilhamento"
+            );
+
+            campo.value =
+                obterLinkCompartilhamento();
+
+            area.hidden = false;
+
+            area.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+
+            campo.focus();
+            campo.select();
+
+        }
+
+        function fecharCompartilhamento() {
+
+            const area = document.getElementById(
+                "area-compartilhamento"
+            );
+
+            area.hidden = true;
+
+        }
+
+        async function copiarLinkCompartilhamento() {
+
+            const link =
+                obterLinkCompartilhamento();
+
+            try {
+
+                await navigator.clipboard.writeText(
+                    link
+                );
+
+                alert(
+                    "Link da rota copiado com sucesso."
+                );
+
+            } catch (
+                erro
+            ) {
+
+                const campo = document.getElementById(
+                    "link-compartilhamento"
+                );
+
+                campo.value = link;
+                campo.focus();
+                campo.select();
+
+                alert(
+                    "Copie o link selecionado."
+                );
+
+            }
+
+        }
+
+        function localizarRota(
+            numeroMotorista
+        ) {
+
+            return rotas.find(
+                function (item) {
+
+                    return (
+                        item.motorista
+                        === numeroMotorista
+                    );
+
+                }
+            );
+
+        }
+
+        function localizarEstatistica(
+            numeroMotorista
+        ) {
+
+            return analise.rotas.find(
+                function (item) {
+
+                    return (
+                        item.motorista
+                        === numeroMotorista
+                    );
+
+                }
+            );
+
+        }
+
+        async function copiarRota(
+            numeroMotorista
+        ) {
+
+            const rota = localizarRota(
+                numeroMotorista
+            );
+
+            if (
+                !rota
+            ) {
+
+                alert(
+                    "Rota não encontrada."
+                );
+
+                return;
+
+            }
+
+            const entregasRota = rota.roteiro.filter(
+                function (ponto) {
+
+                    return ponto.tipo === "Entrega";
+
+                }
+            );
+
+            let texto = "";
+
+            texto += "ROUTEMIND\n";
+
+            texto += (
+                "Motorista "
+                + rota.motorista
+                + "\n\n"
+            );
+
+            texto += "Origem:\n";
+
+            texto += (
+                origem.endereco
+                + "\n\n"
+            );
+
+            entregasRota.forEach(
+                function (ponto, indice) {
+
+                    texto += (
+                        "Parada "
+                        + (indice + 1)
+                        + ":\n"
+                    );
+
+                    texto += (
+                        ponto.endereco
+                        + "\n"
+                    );
+
+                    if (
+                        ponto.bairro
+                    ) {
+
+                        texto += (
+                            "Bairro: "
+                            + ponto.bairro
+                            + "\n"
+                        );
+
+                    }
+
+                    if (
+                        ponto.cidade
+                    ) {
+
+                        texto += (
+                            "Cidade: "
+                            + ponto.cidade
+                            + "\n"
+                        );
+
+                    }
+
+                    texto += "\n";
+
+                }
+            );
+
+            texto += "Retorno:\n";
+            texto += origem.endereco;
+
+            try {
+
+                await navigator.clipboard.writeText(
+                    texto
+                );
+
+                alert(
+                    "Roteiro do Motorista "
+                    + numeroMotorista
+                    + " copiado."
+                );
+
+            } catch (
+                erro
+            ) {
+
+                alert(
+                    "Não foi possível copiar o roteiro."
+                );
+
+            }
+
+        }
+
+        function imprimirRota(
+            numeroMotorista
+        ) {
+
+            const rota = localizarRota(
+                numeroMotorista
+            );
+
+            const estatistica = localizarEstatistica(
+                numeroMotorista
+            );
+
+            if (
+                !rota
+            ) {
+
+                alert(
+                    "Rota não encontrada."
+                );
+
+                return;
+
+            }
+
+            const entregasRota = rota.roteiro.filter(
+                function (ponto) {
+
+                    return ponto.tipo === "Entrega";
+
+                }
+            );
+
+            let listaEntregas = "";
+
+            entregasRota.forEach(
+                function (ponto, indice) {
+
+                    listaEntregas += `
+                        <li>
+
+                            <strong>
+                                Parada ${indice + 1}
+                            </strong>
+
+                            <p>
+                                ${ponto.endereco}
+                            </p>
+
+                            <p>
+                                Bairro:
+                                ${ponto.bairro || "Não informado"}
+                            </p>
+
+                            <p>
+                                Cidade:
+                                ${ponto.cidade || "Não informada"}
+                            </p>
+
+                        </li>
+                    `;
+
+                }
+            );
+
+            let resumo = "";
+
+            if (
+                estatistica
+            ) {
+
+                resumo = `
+                    <div class="resumo">
+
+                        <p>
+
+                            <strong>Entregas:</strong>
+
+                            ${estatistica.entregas}
+
+                        </p>
+
+                        <p>
+
+                            <strong>Distância:</strong>
+
+                            ${estatistica.distancia_km} km
+
+                        </p>
+
+                        <p>
+
+                            <strong>Deslocamento:</strong>
+
+                            ${estatistica.tempo_deslocamento}
+                            minutos
+
+                        </p>
+
+                        <p>
+
+                            <strong>Tempo de paradas:</strong>
+
+                            ${estatistica.tempo_paradas}
+                            minutos
+
+                        </p>
+
+                        <p>
+
+                            <strong>Tempo total:</strong>
+
+                            ${estatistica.tempo_total}
+                            minutos
+
+                        </p>
+
+                    </div>
+                `;
+
+            }
+
+            const janelaImpressao = window.open(
+                "",
+                "_blank",
+                "width=900,height=700"
+            );
+
+            if (
+                !janelaImpressao
+            ) {
+
+                alert(
+                    "O navegador bloqueou a janela de impressão."
+                );
+
+                return;
+
+            }
+
+            janelaImpressao.document.write(`
+                <!DOCTYPE html>
+
+                <html lang="pt-BR">
+
+                <head>
+
+                    <meta charset="UTF-8">
+
+                    <title>
+                        Rota do Motorista ${numeroMotorista}
+                    </title>
+
+                    <style>
+
+                        body {
+                            margin: 40px;
+                            font-family: Arial, sans-serif;
+                            color: #1f2937;
+                        }
+
+                        h1 {
+                            margin-bottom: 5px;
+                        }
+
+                        h2 {
+                            margin-top: 30px;
+                        }
+
+                        .resumo {
+                            display: flex;
+                            flex-wrap: wrap;
+                            gap: 10px 25px;
+                            padding: 15px;
+                            background-color: #f3f4f6;
+                            border-radius: 8px;
+                        }
+
+                        .resumo p {
+                            margin: 0;
+                        }
+
+                        ol {
+                            padding-left: 25px;
+                        }
+
+                        li {
+                            margin-bottom: 15px;
+                            padding: 12px;
+                            border: 1px solid #d1d5db;
+                            border-radius: 8px;
+                        }
+
+                        li p {
+                            margin: 5px 0 0;
+                        }
+
+                        .retorno {
+                            margin-top: 25px;
+                            padding: 15px;
+                            border: 1px solid #d1d5db;
+                            border-radius: 8px;
+                        }
+
+                        @media print {
+
+                            body {
+                                margin: 15px;
+                            }
+
+                        }
+
+                    </style>
+
+                </head>
+
+                <body>
+
+                    <h1>RouteMind</h1>
+
+                    <h2>
+                        Motorista ${numeroMotorista}
+                    </h2>
+
+                    ${resumo}
+
+                    <h2>Origem</h2>
+
+                    <p>
+                        ${origem.endereco}
+                    </p>
+
+                    <h2>Roteiro</h2>
+
+                    <ol>
+                        ${listaEntregas}
+                    </ol>
+
+                    <div class="retorno">
+
+                        <strong>
+                            Retorno para a origem:
+                        </strong>
+
+                        <p>
+                            ${origem.endereco}
+                        </p>
+
+                    </div>
+
+                </body>
+
+                </html>
+            `);
+
+            janelaImpressao.document.close();
+            janelaImpressao.focus();
+
+            setTimeout(
+                function () {
+
+                    janelaImpressao.print();
+
+                },
+                500
+            );
+
+        }
+
+    </script>
+
+</body>
+
+</html>

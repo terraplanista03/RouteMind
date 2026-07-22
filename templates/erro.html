@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Erro - RouteMind</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='css/style.css') }}"
+    >
+
+</head>
+
+<body>
+
+    <main class="container">
+
+        <section class="card pagina-erro">
+
+            <div class="icone-erro">
+                !
+            </div>
+
+            <h1>Não foi possível gerar as rotas</h1>
+
+            <p class="texto-erro">
+
+                O RouteMind encontrou um problema durante o processamento.
+
+            </p>
+
+            {% if mensagem %}
+
+                <div class="mensagem-erro">
+
+                    <strong>Detalhes:</strong>
+
+                    <p>
+                        {{ mensagem }}
+                    </p>
+
+                </div>
+
+            {% endif %}
+
+            {% if detalhes %}
+
+                <details class="detalhes-tecnicos">
+
+                    <summary>
+                        Mostrar detalhes técnicos
+                    </summary>
+
+                    <pre>{{ detalhes }}</pre>
+
+                </details>
+
+            {% endif %}
+
+            <div class="acoes-erro">
+
+                <a
+                    class="botao"
+                    href="/"
+                >
+                    Voltar ao início
+                </a>
+
+                <button
+                    class="botao botao-secundario"
+                    type="button"
+                    onclick="window.history.back()"
+                >
+                    Voltar à página anterior
+                </button>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</body>
+
+</html>
