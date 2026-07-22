@@ -1,35 +1,170 @@
 from ortools.constraint_solver import pywrapcp
 from ortools.constraint_solver import routing_enums_pb2
 
+from config import Config
+
 
 class Optimizer:
 
     def __init__(self):
 
-        self.tempo_maximo = 120 * 60
+        self.tempo_maximo = (
+            Config.TEMPO_MAXIMO_ROTA
+        )
 
-        self.tempo_parada = 20 * 60
+        self.tempo_parada = (
+            Config.TEMPO_PARADA
+        )
 
-    def otimizar(self, matriz_tempo):
+    def otimizar(
+        self,
+        matriz_tempo
+    ):
 
-        quantidade_pontos = len(matriz_tempo)
+        self._validar_matriz(
+            matriz_tempo
+        )
 
-        quantidade_entregas = quantidade_pontos - 1
+        quantidade_pontos = len(
+            matriz_tempo
+        )
 
-        for motoristas in range(1, quantidade_entregas + 1):
+        quantidade_entregas = (
+            quantidade_pontos - 1
+        )
 
-            rotas = self._resolver(
-                matriz_tempo,
-                quantidade_pontos,
-                motoristas
+        if quantidade_entregas <= 0:
+
+            raise Exception(
+                "Nenhuma entrega foi informada."
             )
 
-            if rotas is not None:
+        self._validar_entregas_individuais(
+            matriz_tempo
+        )
+
+        for quantidade_motoristas in range(
+            1,
+            quantidade_entregas + 1
+        ):
+
+            rotas = self._resolver(
+                matriz_tempo=matriz_tempo,
+                quantidade_pontos=quantidade_pontos,
+                quantidade_motoristas=(
+                    quantidade_motoristas
+                )
+            )
+
+            if rotas:
+
                 return rotas
 
         raise Exception(
-            "Não foi possível encontrar uma solução."
+            "Não foi possível organizar todas as entregas "
+            "dentro do limite de 120 minutos por motorista. "
+            "Verifique as distâncias, os endereços e o tempo "
+            "configurado para cada parada."
         )
+
+    def _validar_matriz(
+        self,
+        matriz_tempo
+    ):
+
+        if not matriz_tempo:
+
+            raise Exception(
+                "A matriz de tempos está vazia."
+            )
+
+        quantidade = len(
+            matriz_tempo
+        )
+
+        for linha in matriz_tempo:
+
+            if (
+                not isinstance(
+                    linha,
+                    list
+                )
+                or len(linha) != quantidade
+            ):
+
+                raise Exception(
+                    "A matriz de tempos recebida é inválida."
+                )
+
+    def _validar_entregas_individuais(
+        self,
+        matriz_tempo
+    ):
+
+        entregas_impossiveis = []
+
+        for indice_entrega in range(
+            1,
+            len(matriz_tempo)
+        ):
+
+            tempo_ida = matriz_tempo[
+                0
+            ][
+                indice_entrega
+            ]
+
+            tempo_volta = matriz_tempo[
+                indice_entrega
+            ][
+                0
+            ]
+
+            if (
+                tempo_ida is None
+                or tempo_volta is None
+            ):
+
+                entregas_impossiveis.append(
+                    f"entrega {indice_entrega} "
+                    "(rota indisponível)"
+                )
+
+                continue
+
+            tempo_total = (
+                float(tempo_ida)
+                + float(tempo_volta)
+                + self.tempo_parada
+            )
+
+            if (
+                tempo_total
+                > self.tempo_maximo
+            ):
+
+                minutos = round(
+                    tempo_total / 60,
+                    1
+                )
+
+                entregas_impossiveis.append(
+                    f"entrega {indice_entrega} "
+                    f"({minutos} minutos)"
+                )
+
+        if entregas_impossiveis:
+
+            detalhes = ", ".join(
+                entregas_impossiveis
+            )
+
+            raise Exception(
+                "Algumas entregas não cabem nem em uma rota "
+                "individual de 120 minutos, considerando ida, "
+                "20 minutos de parada e retorno à origem: "
+                f"{detalhes}."
+            )
 
     def _resolver(
         self,
@@ -44,28 +179,51 @@ class Optimizer:
             0
         )
 
-        routing = pywrapcp.RoutingModel(manager)
+        routing = pywrapcp.RoutingModel(
+            manager
+        )
 
-        def tempo_callback(from_index, to_index):
+        def tempo_callback(
+            from_index,
+            to_index
+        ):
 
-            origem = manager.IndexToNode(from_index)
+            origem = manager.IndexToNode(
+                from_index
+            )
 
-            destino = manager.IndexToNode(to_index)
+            destino = manager.IndexToNode(
+                to_index
+            )
 
-            tempo = matriz_tempo[origem][destino]
+            tempo = matriz_tempo[
+                origem
+            ][
+                destino
+            ]
 
             if tempo is None:
-                return 999999999
 
-            tempo = int(tempo)
+                return 999_999_999
+
+            tempo_total = int(
+                round(
+                    float(tempo)
+                )
+            )
 
             if destino != 0:
-                tempo += self.tempo_parada
 
-            return tempo
+                tempo_total += (
+                    self.tempo_parada
+                )
 
-        callback_index = routing.RegisterTransitCallback(
-            tempo_callback
+            return tempo_total
+
+        callback_index = (
+            routing.RegisterTransitCallback(
+                tempo_callback
+            )
         )
 
         routing.SetArcCostEvaluatorOfAllVehicles(
@@ -80,6 +238,14 @@ class Optimizer:
             "Tempo"
         )
 
+        dimensao_tempo = routing.GetDimensionOrDie(
+            "Tempo"
+        )
+
+        dimensao_tempo.SetGlobalSpanCostCoefficient(
+            100
+        )
+
         search_parameters = (
             pywrapcp.DefaultRoutingSearchParameters()
         )
@@ -87,7 +253,7 @@ class Optimizer:
         search_parameters.first_solution_strategy = (
             routing_enums_pb2
             .FirstSolutionStrategy
-            .PATH_CHEAPEST_ARC
+            .PARALLEL_CHEAPEST_INSERTION
         )
 
         search_parameters.local_search_metaheuristic = (
@@ -96,13 +262,16 @@ class Optimizer:
             .GUIDED_LOCAL_SEARCH
         )
 
-        search_parameters.time_limit.seconds = 5
+        search_parameters.time_limit.seconds = 15
+
+        search_parameters.log_search = False
 
         solution = routing.SolveWithParameters(
             search_parameters
         )
 
         if solution is None:
+
             return None
 
         rotas = []
@@ -113,26 +282,38 @@ class Optimizer:
 
             rota = []
 
-            index = routing.Start(motorista)
+            index = routing.Start(
+                motorista
+            )
 
-            while not routing.IsEnd(index):
+            while not routing.IsEnd(
+                index
+            ):
 
-                ponto = manager.IndexToNode(index)
+                ponto = manager.IndexToNode(
+                    index
+                )
 
-                rota.append(ponto)
+                rota.append(
+                    ponto
+                )
 
                 index = solution.Value(
-                    routing.NextVar(index)
+                    routing.NextVar(
+                        index
+                    )
                 )
 
             rota.append(
-                manager.IndexToNode(index)
+                manager.IndexToNode(
+                    index
+                )
             )
 
             if len(rota) > 2:
-                rotas.append(rota)
 
-        if len(rotas) == 0:
-            return None
+                rotas.append(
+                    rota
+                )
 
         return rotas
