@@ -34,7 +34,6 @@ class Optimizer:
         )
 
         if quantidade_entregas <= 0:
-
             raise Exception(
                 "Nenhuma entrega foi informada."
             )
@@ -51,20 +50,15 @@ class Optimizer:
             rotas = self._resolver(
                 matriz_tempo=matriz_tempo,
                 quantidade_pontos=quantidade_pontos,
-                quantidade_motoristas=(
-                    quantidade_motoristas
-                )
+                quantidade_motoristas=quantidade_motoristas
             )
 
             if rotas:
-
                 return rotas
 
         raise Exception(
             "Não foi possível organizar todas as entregas "
-            "dentro do limite de 120 minutos por motorista. "
-            "Verifique as distâncias, os endereços e o tempo "
-            "configurado para cada parada."
+            "dentro do limite de 120 minutos por motorista."
         )
 
     def _validar_matriz(
@@ -73,7 +67,6 @@ class Optimizer:
     ):
 
         if not matriz_tempo:
-
             raise Exception(
                 "A matriz de tempos está vazia."
             )
@@ -91,7 +84,6 @@ class Optimizer:
                 )
                 or len(linha) != quantidade
             ):
-
                 raise Exception(
                     "A matriz de tempos recebida é inválida."
                 )
@@ -138,10 +130,7 @@ class Optimizer:
                 + self.tempo_parada
             )
 
-            if (
-                tempo_total
-                > self.tempo_maximo
-            ):
+            if tempo_total > self.tempo_maximo:
 
                 minutos = round(
                     tempo_total / 60,
@@ -203,7 +192,6 @@ class Optimizer:
             ]
 
             if tempo is None:
-
                 return 999_999_999
 
             tempo_total = int(
@@ -213,10 +201,7 @@ class Optimizer:
             )
 
             if destino != 0:
-
-                tempo_total += (
-                    self.tempo_parada
-                )
+                tempo_total += self.tempo_parada
 
             return tempo_total
 
@@ -238,14 +223,6 @@ class Optimizer:
             "Tempo"
         )
 
-        dimensao_tempo = routing.GetDimensionOrDie(
-            "Tempo"
-        )
-
-        dimensao_tempo.SetGlobalSpanCostCoefficient(
-            100
-        )
-
         search_parameters = (
             pywrapcp.DefaultRoutingSearchParameters()
         )
@@ -262,7 +239,7 @@ class Optimizer:
             .GUIDED_LOCAL_SEARCH
         )
 
-        search_parameters.time_limit.seconds = 15
+        search_parameters.time_limit.seconds = 2
 
         search_parameters.log_search = False
 
@@ -271,7 +248,6 @@ class Optimizer:
         )
 
         if solution is None:
-
             return None
 
         rotas = []
@@ -290,12 +266,10 @@ class Optimizer:
                 index
             ):
 
-                ponto = manager.IndexToNode(
-                    index
-                )
-
                 rota.append(
-                    ponto
+                    manager.IndexToNode(
+                        index
+                    )
                 )
 
                 index = solution.Value(
@@ -311,7 +285,6 @@ class Optimizer:
             )
 
             if len(rota) > 2:
-
                 rotas.append(
                     rota
                 )

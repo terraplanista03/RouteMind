@@ -11,13 +11,15 @@ class Geocoder:
             not Config.OPENROUTESERVICE_API_KEY
             or Config.OPENROUTESERVICE_API_KEY == "SUA_CHAVE_AQUI"
         ):
-
             raise ValueError(
                 "A variável OPENROUTESERVICE_API_KEY não foi configurada."
             )
 
         self.client = openrouteservice.Client(
-            key=Config.OPENROUTESERVICE_API_KEY
+            key=Config.OPENROUTESERVICE_API_KEY,
+            timeout=10,
+            retry_timeout=2,
+            retry_over_query_limit=False
         )
 
     def localizar(
@@ -25,33 +27,56 @@ class Geocoder:
         endereco: str
     ):
 
+        endereco = endereco.strip()
+
+        if not endereco:
+            return None
+
         try:
 
             resultado = self.client.pelias_search(
                 text=endereco,
-                size=1
+                size=1,
+                boundary_country=["BR"]
             )
 
-            if (
-                not resultado.get("features")
-            ):
+            features = resultado.get(
+                "features",
+                []
+            )
 
+            if not features:
                 return None
 
-            feature = resultado["features"][0]
+            feature = features[0]
 
-            longitude, latitude = (
-                feature["geometry"]["coordinates"]
+            coordenadas = feature.get(
+                "geometry",
+                {}
+            ).get(
+                "coordinates",
+                []
             )
+
+            if len(coordenadas) < 2:
+                return None
+
+            longitude, latitude = coordenadas
 
             propriedades = feature.get(
                 "properties",
                 {}
             )
 
+            endereco_encontrado = propriedades.get(
+                "label",
+                endereco
+            )
+
             return {
                 "latitude": latitude,
                 "longitude": longitude,
+                "endereco_encontrado": endereco_encontrado,
                 "bairro": propriedades.get(
                     "borough",
                     propriedades.get(
@@ -83,7 +108,8 @@ class Geocoder:
         except Exception as erro:
 
             print(
-                f"Erro ao localizar '{endereco}': {erro}"
+                f"Erro ao localizar '{endereco}': {erro}",
+                flush=True
             )
 
             return None
