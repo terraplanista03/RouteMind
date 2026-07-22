@@ -1,4 +1,4 @@
-from config import TEMPO_PARADA
+from config import Config
 
 
 class RouteStatistics:
@@ -11,25 +11,24 @@ class RouteStatistics:
     ):
 
         tempo_total = 0
-
         tempo_deslocamento_total = 0
-
         distancia_total = 0
 
         estatisticas = []
 
+        tempo_parada_minutos = (
+            Config.TEMPO_PARADA / 60
+        )
+
         for indice_motorista, rota in enumerate(rotas):
 
             tempo_deslocamento = 0
-
             distancia_rota = 0
-
             entregas = 0
 
             for i in range(len(rota) - 1):
 
                 origem = rota[i]
-
                 destino = rota[i + 1]
 
                 tempo = matriz_tempo[origem][destino]
@@ -41,7 +40,11 @@ class RouteStatistics:
 
                 if matriz_distancia is not None:
 
-                    distancia = matriz_distancia[origem][destino]
+                    distancia = matriz_distancia[
+                        origem
+                    ][
+                        destino
+                    ]
 
                     if distancia is None:
                         distancia = 0
@@ -51,7 +54,10 @@ class RouteStatistics:
                 if destino != 0:
                     entregas += 1
 
-            tempo_paradas = entregas * TEMPO_PARADA
+            tempo_paradas = (
+                entregas
+                * tempo_parada_minutos
+            )
 
             tempo_rota = (
                 tempo_deslocamento
@@ -67,49 +73,39 @@ class RouteStatistics:
             distancia_total += distancia_rota
 
             estatisticas.append({
-
                 "motorista": indice_motorista + 1,
-
                 "entregas": entregas,
-
                 "tempo_deslocamento": round(
                     tempo_deslocamento,
                     1
                 ),
-
-                "tempo_paradas": tempo_paradas,
-
+                "tempo_paradas": round(
+                    tempo_paradas,
+                    1
+                ),
                 "tempo_total": round(
                     tempo_rota,
                     1
                 ),
-
                 "distancia_km": round(
                     distancia_rota,
                     1
                 )
-
             })
 
         return {
-
             "motoristas": len(rotas),
-
             "tempo_deslocamento": round(
                 tempo_deslocamento_total,
                 1
             ),
-
             "tempo_total": round(
                 tempo_total,
                 1
             ),
-
             "distancia_total_km": round(
                 distancia_total,
                 1
             ),
-
             "rotas": estatisticas
-
         }
