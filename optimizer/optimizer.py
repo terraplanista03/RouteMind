@@ -7,7 +7,7 @@ from config import Config
 
 
 class OptimizationError(Exception):
-    """Erro controlado durante a otimização."""
+    """Erro controlado durante a otimização das rotas."""
 
 
 class Optimizer:
@@ -39,12 +39,12 @@ class Optimizer:
         matriz_tempo
     ) -> list[list[int]]:
 
-        matrix = self._prepare_matrix(
+        matriz_original = self._preparar_matriz(
             matriz_tempo
         )
 
         quantidade_pontos = len(
-            matrix
+            matriz_original
         )
 
         quantidade_entregas = (
@@ -56,25 +56,50 @@ class Optimizer:
                 "Nenhuma entrega foi informada."
             )
 
-        self._validate_individual_deliveries(
-            matrix
+        self._validar_entregas_individuais(
+            matriz_original
+        )
+
+        matriz_com_destino, destino_final = (
+            self._adicionar_destino_aberto(
+                matriz_original
+            )
+        )
+
+        quantidade_total_pontos = len(
+            matriz_com_destino
         )
 
         quantidade_motoristas = (
             quantidade_entregas
         )
 
-        manager = pywrapcp.RoutingIndexManager(
-            quantidade_pontos,
-            quantidade_motoristas,
+        inicios = [
             0
+            for _ in range(
+                quantidade_motoristas
+            )
+        ]
+
+        finais = [
+            destino_final
+            for _ in range(
+                quantidade_motoristas
+            )
+        ]
+
+        manager = pywrapcp.RoutingIndexManager(
+            quantidade_total_pontos,
+            quantidade_motoristas,
+            inicios,
+            finais
         )
 
         routing = pywrapcp.RoutingModel(
             manager
         )
 
-        def time_callback(
+        def tempo_callback(
             from_index,
             to_index
         ) -> int:
@@ -87,7 +112,10 @@ class Optimizer:
                 to_index
             )
 
-            tempo = matrix[
+            if destino == destino_final:
+                return 0
+
+            tempo = matriz_com_destino[
                 origem
             ][
                 destino
@@ -98,8 +126,10 @@ class Optimizer:
 
             return tempo
 
-        callback_index = routing.RegisterTransitCallback(
-            time_callback
+        callback_index = (
+            routing.RegisterTransitCallback(
+                tempo_callback
+            )
         )
 
         routing.SetArcCostEvaluatorOfAllVehicles(
@@ -114,67 +144,69 @@ class Optimizer:
             "Tempo"
         )
 
-        time_dimension = routing.GetDimensionOrDie(
+        dimensao_tempo = routing.GetDimensionOrDie(
             "Tempo"
         )
 
-        time_dimension.SetGlobalSpanCostCoefficient(
+        dimensao_tempo.SetGlobalSpanCostCoefficient(
             10
         )
 
-        fixed_vehicle_cost = max(
+        custo_motorista = max(
             self.tempo_maximo * 100,
             1_000_000
         )
 
-        for vehicle in range(
+        for motorista in range(
             quantidade_motoristas
         ):
 
             routing.SetFixedCostOfVehicle(
-                fixed_vehicle_cost,
-                vehicle
+                custo_motorista,
+                motorista
             )
 
-        search_parameters = (
+        parametros = (
             pywrapcp.DefaultRoutingSearchParameters()
         )
 
-        search_parameters.first_solution_strategy = (
+        parametros.first_solution_strategy = (
             routing_enums_pb2
             .FirstSolutionStrategy
             .PARALLEL_CHEAPEST_INSERTION
         )
 
-        search_parameters.local_search_metaheuristic = (
+        parametros.local_search_metaheuristic = (
             routing_enums_pb2
             .LocalSearchMetaheuristic
             .GUIDED_LOCAL_SEARCH
         )
 
-        search_parameters.time_limit.seconds = (
+        parametros.time_limit.seconds = (
             self.MAX_SOLVE_SECONDS
         )
 
-        search_parameters.log_search = False
+        parametros.log_search = False
 
-        solution = routing.SolveWithParameters(
-            search_parameters
+        solucao = routing.SolveWithParameters(
+            parametros
         )
 
-        if solution is None:
+        if solucao is None:
 
             raise OptimizationError(
                 "Não foi possível encontrar uma divisão "
-                "válida das entregas. Confira se todos os "
-                "endereços estão dentro do alcance permitido."
+                "válida das entregas."
             )
 
-        rotas = self._extract_routes(
+        rotas = self._extrair_rotas(
             routing=routing,
             manager=manager,
-            solution=solution,
-            quantidade_motoristas=quantidade_motoristas
+            solucao=solucao,
+            quantidade_motoristas=(
+                quantidade_motoristas
+            ),
+            destino_final=destino_final
         )
 
         if not rotas:
@@ -183,14 +215,57 @@ class Optimizer:
                 "O otimizador não gerou nenhuma rota."
             )
 
-        self._validate_result(
-            routes=rotas,
-            matrix=matrix
+        self._validar_resultado(
+            rotas=rotas,
+            matriz=matriz_original
         )
 
         return rotas
 
-    def _prepare_matrix(
+    def _adicionar_destino_aberto(
+        self,
+        matriz: list[list[int]]
+    ) -> tuple[list[list[int]], int]:
+
+        quantidade_original = len(
+            matriz
+        )
+
+        destino_final = quantidade_original
+
+        nova_matriz = []
+
+        for linha in matriz:
+
+            nova_linha = list(
+                linha
+            )
+
+            nova_linha.append(
+                0
+            )
+
+            nova_matriz.append(
+                nova_linha
+            )
+
+        linha_destino = [
+            0
+            for _ in range(
+                quantidade_original + 1
+            )
+        ]
+
+        nova_matriz.append(
+            linha_destino
+        )
+
+        return (
+            nova_matriz,
+            destino_final
+        )
+
+    def _preparar_matriz(
         self,
         matriz_tempo
     ) -> list[list[int]]:
@@ -211,267 +286,267 @@ class Optimizer:
             matriz_tempo
         )
 
-        prepared = []
+        matriz_preparada = []
 
-        for row_index, row in enumerate(
+        for indice_linha, linha in enumerate(
             matriz_tempo
         ):
 
             if (
                 not isinstance(
-                    row,
+                    linha,
                     list
                 )
-                or len(row) != quantidade
+                or len(linha) != quantidade
             ):
 
                 raise OptimizationError(
                     "A matriz de tempos não é quadrada."
                 )
 
-            prepared_row = []
+            nova_linha = []
 
-            for column_index, value in enumerate(
-                row
+            for indice_coluna, valor in enumerate(
+                linha
             ):
 
-                if (
-                    row_index == column_index
-                ):
+                if indice_linha == indice_coluna:
 
-                    prepared_row.append(
+                    nova_linha.append(
                         0
                     )
 
                     continue
 
-                if value is None:
+                if valor is None:
 
                     raise OptimizationError(
                         "Não existe rota rodoviária entre "
-                        f"os pontos {row_index} e "
-                        f"{column_index}."
+                        f"os pontos {indice_linha} e "
+                        f"{indice_coluna}."
                     )
 
                 try:
-                    numeric_value = float(
-                        value
+
+                    valor_numerico = float(
+                        valor
                     )
+
                 except (
                     TypeError,
                     ValueError
-                ) as error:
+                ) as erro:
+
                     raise OptimizationError(
                         "A matriz contém um tempo inválido."
-                    ) from error
+                    ) from erro
 
                 if (
                     math.isnan(
-                        numeric_value
+                        valor_numerico
                     )
                     or math.isinf(
-                        numeric_value
+                        valor_numerico
                     )
-                    or numeric_value < 0
+                    or valor_numerico < 0
                 ):
 
                     raise OptimizationError(
                         "A matriz contém um tempo inválido."
                     )
 
-                prepared_row.append(
+                nova_linha.append(
                     max(
                         0,
                         int(
                             round(
-                                numeric_value
+                                valor_numerico
                             )
                         )
                     )
                 )
 
-            prepared.append(
-                prepared_row
+            matriz_preparada.append(
+                nova_linha
             )
 
-        return prepared
+        return matriz_preparada
 
-    def _validate_individual_deliveries(
+    def _validar_entregas_individuais(
         self,
-        matrix: list[list[int]]
+        matriz: list[list[int]]
     ) -> None:
 
-        invalid_deliveries = []
+        entregas_invalidas = []
 
-        for delivery_index in range(
+        for indice_entrega in range(
             1,
-            len(matrix)
+            len(matriz)
         ):
 
-            total_time = (
-                matrix[0][delivery_index]
+            tempo_total = (
+                matriz[0][indice_entrega]
                 + self.tempo_parada
-                + matrix[delivery_index][0]
             )
 
-            if total_time > self.tempo_maximo:
+            if tempo_total > self.tempo_maximo:
 
-                invalid_deliveries.append(
+                entregas_invalidas.append(
                     {
-                        "indice": delivery_index,
+                        "indice": indice_entrega,
                         "minutos": round(
-                            total_time / 60,
+                            tempo_total / 60,
                             1
                         )
                     }
                 )
 
-        if invalid_deliveries:
+        if entregas_invalidas:
 
-            details = ", ".join(
+            detalhes = ", ".join(
                 (
                     f"entrega {item['indice']} "
                     f"({item['minutos']} minutos)"
                 )
-                for item in invalid_deliveries
+                for item in entregas_invalidas
             )
 
             raise OptimizationError(
                 "As seguintes entregas ultrapassam o "
                 "limite mesmo quando feitas individualmente: "
-                f"{details}."
+                f"{detalhes}."
             )
 
-    def _extract_routes(
+    def _extrair_rotas(
         self,
         routing,
         manager,
-        solution,
-        quantidade_motoristas: int
+        solucao,
+        quantidade_motoristas: int,
+        destino_final: int
     ) -> list[list[int]]:
 
-        routes = []
+        rotas = []
 
-        for vehicle in range(
+        for motorista in range(
             quantidade_motoristas
         ):
 
             index = routing.Start(
-                vehicle
+                motorista
             )
 
-            route = []
+            rota = []
 
             while not routing.IsEnd(
                 index
             ):
 
-                route.append(
-                    manager.IndexToNode(
-                        index
-                    )
+                ponto = manager.IndexToNode(
+                    index
                 )
 
-                index = solution.Value(
+                if ponto != destino_final:
+
+                    rota.append(
+                        ponto
+                    )
+
+                index = solucao.Value(
                     routing.NextVar(
                         index
                     )
                 )
 
-            route.append(
-                manager.IndexToNode(
-                    index
-                )
-            )
+            if len(rota) > 1:
 
-            if len(route) > 2:
-
-                routes.append(
-                    route
+                rotas.append(
+                    rota
                 )
 
-        return routes
+        return rotas
 
-    def _validate_result(
+    def _validar_resultado(
         self,
-        routes: list[list[int]],
-        matrix: list[list[int]]
+        rotas: list[list[int]],
+        matriz: list[list[int]]
     ) -> None:
 
-        expected_deliveries = set(
+        entregas_esperadas = set(
             range(
                 1,
-                len(matrix)
+                len(matriz)
             )
         )
 
-        generated_deliveries = []
+        entregas_geradas = []
 
-        for route in routes:
+        for rota in rotas:
 
-            if (
-                route[0] != 0
-                or route[-1] != 0
-            ):
+            if not rota or rota[0] != 0:
 
                 raise OptimizationError(
-                    "Uma rota foi gerada sem iniciar e "
-                    "terminar na origem."
+                    "Uma rota foi gerada sem iniciar na origem."
                 )
 
-            route_time = 0
+            tempo_rota = 0
 
-            for position in range(
-                len(route) - 1
+            for posicao in range(
+                len(rota) - 1
             ):
 
-                origin = route[position]
-                destination = route[
-                    position + 1
+                origem = rota[
+                    posicao
                 ]
 
-                route_time += matrix[
-                    origin
+                destino = rota[
+                    posicao + 1
+                ]
+
+                tempo_rota += matriz[
+                    origem
                 ][
-                    destination
+                    destino
                 ]
 
-                if destination != 0:
+                if destino != 0:
 
-                    route_time += (
+                    tempo_rota += (
                         self.tempo_parada
                     )
 
-                    generated_deliveries.append(
-                        destination
+                    entregas_geradas.append(
+                        destino
                     )
 
-            if route_time > self.tempo_maximo:
+            if tempo_rota > self.tempo_maximo:
 
                 raise OptimizationError(
-                    "Uma rota ultrapassou o tempo máximo "
-                    "permitido."
+                    "Uma rota ultrapassou o tempo máximo."
                 )
 
         if (
-            set(generated_deliveries)
-            != expected_deliveries
+            set(
+                entregas_geradas
+            )
+            != entregas_esperadas
         ):
 
             raise OptimizationError(
-                "Nem todas as entregas foram incluídas "
-                "nas rotas."
+                "Nem todas as entregas foram incluídas."
             )
 
         if (
-            len(generated_deliveries)
+            len(
+                entregas_geradas
+            )
             != len(
                 set(
-                    generated_deliveries
+                    entregas_geradas
                 )
             )
         ):
 
             raise OptimizationError(
-                "Uma entrega foi incluída em mais de uma rota."
+                "Uma entrega foi incluída mais de uma vez."
             )
