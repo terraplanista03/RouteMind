@@ -53,75 +53,30 @@ class Geocoder:
 
         if componentes:
 
-            resultado = self._buscar_estruturado(
+            features = self._buscar_estruturado(
                 componentes
+            )
+
+            resultado = self._selecionar_resultado_exato(
+                features=features,
+                componentes=componentes
             )
 
             if resultado:
                 return resultado
 
-        return self._buscar_texto_livre(
-            endereco=endereco,
-            componentes=componentes,
-            contexto=contexto
-        )
+            features = self._buscar_texto_livre(
+                endereco
+            )
 
-    def _buscar_estruturado(
-        self,
-        componentes: dict
-    ):
-
-        logradouro = componentes[
-            "logradouro"
-        ]
-
-        numero = componentes[
-            "numero"
-        ]
-
-        parametros = {
-            "api_key": self.chave,
-            "address": (
-                f"{logradouro}, {numero}"
-            ),
-            "neighbourhood": componentes[
-                "bairro"
-            ],
-            "locality": componentes[
-                "cidade"
-            ],
-            "region": componentes[
-                "estado"
-            ],
-            "postalcode": componentes[
-                "cep"
-            ],
-            "country": "Brasil",
-            "boundary.country": "BR",
-            "size": 10
-        }
-
-        features = self._consultar(
-            url=self.URL_ESTRUTURADA,
-            parametros=parametros
-        )
-
-        return self._selecionar_resultado(
-            features=features,
-            componentes=componentes,
-            exigir_numero=True
-        )
-
-    def _buscar_texto_livre(
-        self,
-        endereco: str,
-        componentes: dict | None,
-        contexto: dict | None
-    ):
+            return self._selecionar_resultado_exato(
+                features=features,
+                componentes=componentes
+            )
 
         consulta = endereco
 
-        if componentes is None and contexto:
+        if contexto:
 
             cidade = str(
                 contexto.get(
@@ -137,47 +92,79 @@ class Geocoder:
                 )
             ).strip()
 
-            complemento = ", ".join(
+            partes = [
                 parte
                 for parte in [
+                    consulta,
                     cidade,
                     estado,
                     "Brasil"
                 ]
                 if parte
+            ]
+
+            consulta = ", ".join(
+                partes
             )
 
-            if complemento:
+        features = self._buscar_texto_livre(
+            consulta
+        )
 
-                consulta = (
-                    f"{endereco}, {complemento}"
-                )
+        return self._selecionar_resultado_simples(
+            features
+        )
+
+    def _buscar_estruturado(
+        self,
+        componentes: dict
+    ):
 
         parametros = {
             "api_key": self.chave,
-            "text": consulta,
+            "address": (
+                componentes["logradouro"]
+                + ", "
+                + componentes["numero"]
+            ),
+            "neighbourhood": componentes[
+                "bairro"
+            ],
+            "locality": componentes[
+                "cidade"
+            ],
+            "region": componentes[
+                "estado"
+            ],
+            "postalcode": componentes[
+                "cep"
+            ],
+            "country": "Brasil",
             "boundary.country": "BR",
-            "size": 10,
-            "lang": "pt"
+            "size": 20
         }
 
-        features = self._consultar(
-            url=self.URL_BUSCA_LIVRE,
+        return self._consultar(
+            url=self.URL_ESTRUTURADA,
             parametros=parametros
         )
 
-        if componentes:
+    def _buscar_texto_livre(
+        self,
+        endereco: str
+    ):
 
-            return self._selecionar_resultado(
-                features=features,
-                componentes=componentes,
-                exigir_numero=True
-            )
+        parametros = {
+            "api_key": self.chave,
+            "text": endereco,
+            "boundary.country": "BR",
+            "size": 20,
+            "lang": "pt"
+        }
 
-        return self._selecionar_resultado(
-            features=features,
-            componentes=None,
-            exigir_numero=False
+        return self._consultar(
+            url=self.URL_BUSCA_LIVRE,
+            parametros=parametros
         )
 
     def _consultar(
@@ -207,19 +194,14 @@ class Geocoder:
 
             raise Exception(
                 "O serviço de localização demorou "
-                "demais para responder. Tente novamente."
+                "demais para responder."
             ) from erro
 
         except requests.RequestException as erro:
 
-            print(
-                f"Erro no geocodificador: {erro}",
-                flush=True
-            )
-
             raise Exception(
                 "Não foi possível consultar o serviço "
-                "de localização dos endereços."
+                "de localização."
             ) from erro
 
         except ValueError as erro:
@@ -229,12 +211,27 @@ class Geocoder:
                 "uma resposta inválida."
             ) from erro
 
-    def _selecionar_resultado(
+    def _selecionar_resultado_exato(
         self,
         features: list,
-        componentes: dict | None,
-        exigir_numero: bool
+        componentes: dict
     ):
+
+        numero_desejado = self._normalizar_numero(
+            componentes["numero"]
+        )
+
+        cep_desejado = self._normalizar_cep(
+            componentes["cep"]
+        )
+
+        cidade_desejada = self._normalizar(
+            componentes["cidade"]
+        )
+
+        estado_desejado = self._normalizar(
+            componentes["estado"]
+        )
 
         candidatos = []
 
@@ -256,23 +253,110 @@ class Geocoder:
             if len(coordenadas) < 2:
                 continue
 
-            pontuacao = self._pontuar(
-                propriedades=propriedades,
-                componentes=componentes
-            )
-
-            numero_valido = (
-                self._numero_corresponde(
-                    propriedades=propriedades,
-                    componentes=componentes
+            camada = self._normalizar(
+                propriedades.get(
+                    "layer",
+                    ""
                 )
             )
 
+            precisao = self._normalizar(
+                propriedades.get(
+                    "accuracy",
+                    ""
+                )
+            )
+
+            numero_resultado = (
+                self._normalizar_numero(
+                    propriedades.get(
+                        "housenumber",
+                        ""
+                    )
+                )
+            )
+
+            cep_resultado = self._normalizar_cep(
+                propriedades.get(
+                    "postalcode",
+                    ""
+                )
+            )
+
+            cidade_resultado = self._normalizar(
+                propriedades.get(
+                    "locality",
+                    propriedades.get(
+                        "county",
+                        ""
+                    )
+                )
+            )
+
+            estado_resultado = self._normalizar(
+                propriedades.get(
+                    "region_a",
+                    propriedades.get(
+                        "region",
+                        ""
+                    )
+                )
+            )
+
+            # Exige um resultado realmente classificado
+            # como endereço, e não rua ou estabelecimento.
+            if camada != "address":
+                continue
+
+            # O número retornado pela API precisa ser
+            # exatamente igual ao número digitado.
+            if numero_resultado != numero_desejado:
+                continue
+
             if (
-                exigir_numero
-                and not numero_valido
+                cidade_desejada
+                and cidade_resultado
+                and cidade_desejada
+                != cidade_resultado
             ):
                 continue
+
+            if (
+                estado_desejado
+                and estado_resultado
+                and estado_desejado
+                not in estado_resultado
+                and estado_resultado
+                not in estado_desejado
+            ):
+                continue
+
+            pontuacao = 1000
+
+            if (
+                cep_desejado
+                and cep_resultado
+                == cep_desejado
+            ):
+                pontuacao += 500
+
+            if precisao == "point":
+                pontuacao += 500
+
+            confianca = propriedades.get(
+                "confidence",
+                0
+            )
+
+            try:
+                pontuacao += (
+                    float(confianca) * 100
+                )
+            except (
+                TypeError,
+                ValueError
+            ):
+                pass
 
             candidatos.append(
                 (
@@ -289,238 +373,34 @@ class Geocoder:
             reverse=True
         )
 
-        melhor_feature = candidatos[
-            0
-        ][
-            1
-        ]
-
         return self._formatar_resultado(
-            melhor_feature
+            candidatos[0][1]
         )
 
-    def _pontuar(
+    def _selecionar_resultado_simples(
         self,
-        propriedades: dict,
-        componentes: dict | None
+        features: list
     ):
 
-        pontuacao = 0
+        if not features:
+            return None
 
-        camada = self._normalizar(
-            propriedades.get(
-                "layer",
-                ""
-            )
-        )
+        for feature in features:
 
-        if camada == "address":
-            pontuacao += 300
-
-        elif camada == "venue":
-            pontuacao += 80
-
-        elif camada == "street":
-            pontuacao += 20
-
-        confianca = propriedades.get(
-            "confidence",
-            0
-        )
-
-        try:
-
-            pontuacao += (
-                float(confianca) * 50
+            coordenadas = feature.get(
+                "geometry",
+                {}
+            ).get(
+                "coordinates",
+                []
             )
 
-        except (
-            TypeError,
-            ValueError
-        ):
-            pass
-
-        if not componentes:
-            return pontuacao
-
-        numero_desejado = self._normalizar_numero(
-            componentes.get(
-                "numero",
-                ""
-            )
-        )
-
-        numero_resultado = (
-            self._normalizar_numero(
-                propriedades.get(
-                    "housenumber",
-                    ""
+            if len(coordenadas) >= 2:
+                return self._formatar_resultado(
+                    feature
                 )
-            )
-        )
 
-        if (
-            numero_desejado
-            and numero_resultado
-            == numero_desejado
-        ):
-            pontuacao += 500
-
-        cep_desejado = self._normalizar_cep(
-            componentes.get(
-                "cep",
-                ""
-            )
-        )
-
-        cep_resultado = self._normalizar_cep(
-            propriedades.get(
-                "postalcode",
-                ""
-            )
-        )
-
-        if (
-            cep_desejado
-            and cep_resultado
-            == cep_desejado
-        ):
-            pontuacao += 350
-
-        cidade_desejada = self._normalizar(
-            componentes.get(
-                "cidade",
-                ""
-            )
-        )
-
-        cidade_resultado = self._normalizar(
-            propriedades.get(
-                "locality",
-                propriedades.get(
-                    "county",
-                    ""
-                )
-            )
-        )
-
-        if (
-            cidade_desejada
-            and cidade_desejada
-            == cidade_resultado
-        ):
-            pontuacao += 200
-
-        estado_desejado = self._normalizar(
-            componentes.get(
-                "estado",
-                ""
-            )
-        )
-
-        estado_resultado = self._normalizar(
-            propriedades.get(
-                "region_a",
-                propriedades.get(
-                    "region",
-                    ""
-                )
-            )
-        )
-
-        if (
-            estado_desejado
-            and (
-                estado_desejado
-                == estado_resultado
-                or estado_desejado
-                in estado_resultado
-            )
-        ):
-            pontuacao += 100
-
-        bairro_desejado = self._normalizar(
-            componentes.get(
-                "bairro",
-                ""
-            )
-        )
-
-        bairro_resultado = self._normalizar(
-            propriedades.get(
-                "neighbourhood",
-                propriedades.get(
-                    "borough",
-                    propriedades.get(
-                        "localadmin",
-                        ""
-                    )
-                )
-            )
-        )
-
-        if (
-            bairro_desejado
-            and bairro_desejado
-            == bairro_resultado
-        ):
-            pontuacao += 100
-
-        return pontuacao
-
-    def _numero_corresponde(
-        self,
-        propriedades: dict,
-        componentes: dict | None
-    ):
-
-        if not componentes:
-            return True
-
-        numero_desejado = (
-            self._normalizar_numero(
-                componentes.get(
-                    "numero",
-                    ""
-                )
-            )
-        )
-
-        if not numero_desejado:
-            return True
-
-        numero_resultado = (
-            self._normalizar_numero(
-                propriedades.get(
-                    "housenumber",
-                    ""
-                )
-            )
-        )
-
-        if (
-            numero_resultado
-            == numero_desejado
-        ):
-            return True
-
-        label = self._normalizar(
-            propriedades.get(
-                "label",
-                ""
-            )
-        )
-
-        return bool(
-            re.search(
-                r"\b"
-                + re.escape(
-                    numero_desejado
-                )
-                + r"\b",
-                label
-            )
-        )
+        return None
 
     def _formatar_resultado(
         self,
@@ -597,6 +477,10 @@ class Geocoder:
             "tipo_resultado": propriedades.get(
                 "layer",
                 ""
+            ),
+            "precisao": propriedades.get(
+                "accuracy",
+                ""
             )
         }
 
@@ -631,12 +515,10 @@ class Geocoder:
         if not resultado:
             return None
 
-        componentes = resultado.groupdict()
-
         return {
             chave: valor.strip()
             for chave, valor
-            in componentes.items()
+            in resultado.groupdict().items()
         }
 
     @staticmethod

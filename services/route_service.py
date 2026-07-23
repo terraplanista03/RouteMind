@@ -34,8 +34,10 @@ class RouteService:
         if origem_dados is None:
 
             raise Exception(
-                "Não foi possível localizar a origem. "
-                "Confira o endereço e tente novamente."
+                "O número exato da origem não foi encontrado "
+                "na base do mapa. Confira o número e o CEP. "
+                "O RouteMind não utilizará uma localização "
+                "aproximada para evitar uma rota incorreta."
             )
 
         contexto_origem = {
@@ -56,7 +58,10 @@ class RouteService:
         entregas_validas = []
         enderecos_invalidos = []
 
-        for entrega in entregas:
+        for indice, entrega in enumerate(
+            entregas,
+            start=1
+        ):
 
             dados = self.geocoder.localizar(
                 endereco=entrega.endereco,
@@ -66,7 +71,10 @@ class RouteService:
             if dados is None:
 
                 enderecos_invalidos.append(
-                    entrega.endereco
+                    (
+                        f"Entrega {indice}: "
+                        f"{entrega.endereco}"
+                    )
                 )
 
                 continue
@@ -100,19 +108,21 @@ class RouteService:
 
         if enderecos_invalidos:
 
-            lista_invalidos = "; ".join(
+            lista_invalidos = " | ".join(
                 enderecos_invalidos
             )
 
             raise Exception(
-                "Não foi possível localizar os seguintes "
-                f"endereços: {lista_invalidos}."
+                "O número exato não foi encontrado para: "
+                f"{lista_invalidos}. "
+                "Confira número, bairro e CEP. "
+                "Resultados aproximados foram recusados."
             )
 
         if not entregas_validas:
 
             raise Exception(
-                "Nenhum endereço válido foi encontrado."
+                "Nenhum endereço exato foi encontrado."
             )
 
         coordenadas = [
