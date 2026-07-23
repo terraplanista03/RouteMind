@@ -1,9 +1,9 @@
-from services.validator import Validator
+from optimizer.optimizer import Optimizer
 from services.geocoder import Geocoder
 from services.matrix_service import MatrixService
-from services.route_statistics import RouteStatistics
 from services.route_formatter import RouteFormatter
-from optimizer.optimizer import Optimizer
+from services.route_statistics import RouteStatistics
+from services.validator import Validator
 
 
 class RouteService:
@@ -17,39 +17,102 @@ class RouteService:
         self.statistics = RouteStatistics()
         self.formatter = RouteFormatter()
 
-    def processar(self, origem, enderecos):
+    def processar(
+        self,
+        origem,
+        enderecos
+    ):
 
-        entregas = self.validator.criar_lista(enderecos)
+        entregas = self.validator.criar_lista(
+            enderecos
+        )
 
-        origem_dados = self.geocoder.localizar(origem)
+        origem_dados = self.geocoder.localizar(
+            origem
+        )
 
         if origem_dados is None:
+
             raise Exception(
-                "Não foi possível localizar a origem."
+                "Não foi possível localizar a origem. "
+                "Confira o endereço e tente novamente."
             )
 
+        contexto_origem = {
+            "cidade": origem_dados.get(
+                "cidade",
+                ""
+            ),
+            "estado": origem_dados.get(
+                "estado",
+                ""
+            ),
+            "pais": origem_dados.get(
+                "pais",
+                "Brasil"
+            )
+        }
+
         entregas_validas = []
+        enderecos_invalidos = []
 
         for entrega in entregas:
 
             dados = self.geocoder.localizar(
-                entrega.endereco
+                endereco=entrega.endereco,
+                contexto=contexto_origem
             )
 
             if dados is None:
+
+                enderecos_invalidos.append(
+                    entrega.endereco
+                )
+
                 continue
 
-            entrega.latitude = dados["latitude"]
-            entrega.longitude = dados["longitude"]
-            entrega.bairro = dados["bairro"]
-            entrega.cidade = dados["cidade"]
-            entrega.estado = dados["estado"]
+            entrega.latitude = dados[
+                "latitude"
+            ]
 
-            entregas_validas.append(entrega)
+            entrega.longitude = dados[
+                "longitude"
+            ]
 
-        if len(entregas_validas) == 0:
+            entrega.bairro = dados.get(
+                "bairro",
+                ""
+            )
+
+            entrega.cidade = dados.get(
+                "cidade",
+                ""
+            )
+
+            entrega.estado = dados.get(
+                "estado",
+                ""
+            )
+
+            entregas_validas.append(
+                entrega
+            )
+
+        if enderecos_invalidos:
+
+            lista_invalidos = "; ".join(
+                enderecos_invalidos
+            )
+
             raise Exception(
-                "Nenhum endereço válido encontrado."
+                "Não foi possível localizar os seguintes "
+                f"endereços: {lista_invalidos}."
+            )
+
+        if not entregas_validas:
+
+            raise Exception(
+                "Nenhum endereço válido foi encontrado."
             )
 
         coordenadas = [
@@ -61,10 +124,12 @@ class RouteService:
 
         for entrega in entregas_validas:
 
-            coordenadas.append([
-                entrega.longitude,
-                entrega.latitude
-            ])
+            coordenadas.append(
+                [
+                    entrega.longitude,
+                    entrega.latitude
+                ]
+            )
 
         matriz = self.matrix.calcular(
             coordenadas
@@ -75,9 +140,13 @@ class RouteService:
         )
 
         analise = self.statistics.calcular(
-            matriz["durations"],
-            rotas_indices,
-            matriz["distances"]
+            matriz_tempo=matriz[
+                "durations"
+            ],
+            rotas=rotas_indices,
+            matriz_distancia=matriz[
+                "distances"
+            ]
         )
 
         rotas = self.formatter.formatar(
